@@ -129,16 +129,20 @@ def bucket_land_cover(pcts: dict[int, float]) -> dict[str, float]:
 
 
 def fetch_hsg(geom):
-    """Return an xarray DataArray of the gNATSGO hydrologic-group class."""
-    import geopandas as gpd
+    """Return an xarray DataArray of the gNATSGO hydrologic-group class.
+
+    Pass the shapely geometry directly — feeding a GeoDataFrame triggers
+    pygeohydro to call ``GeoDataFrame.bounds`` (which returns a per-row
+    DataFrame), and pystac-client's bbox formatter can't flatten that to
+    4 floats. A bare Polygon/MultiPolygon goes through ``geo2polygon``
+    cleanly and ``.bounds`` returns a 4-tuple as expected.
+    """
     from pygeohydro import soil_gnatsgo
 
-    gdf = gpd.GeoDataFrame(geometry=[geom], crs="EPSG:4326")
-    ds = soil_gnatsgo(["hydclprs"], gdf)
-    # Dataset may be dict-like or single; extract the hydclprs variable
+    ds = soil_gnatsgo(["hydclprs"], geom, crs=4326)
     if hasattr(ds, "data_vars"):
         return ds["hydclprs"]
-    # Some versions return a dict of datasets
+    # Some versions return a dict of datasets keyed by basin index.
     first = next(iter(ds.values()))
     return first["hydclprs"]
 
