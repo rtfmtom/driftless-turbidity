@@ -66,7 +66,20 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
                 ]
               : stream.gauges.map((gauge) => (
                   <tr key={`${stream.id}-${gauge.usgs_site_id}`}>
-                    <td className="px-3 py-2 font-medium">{stream.name}</td>
+                    <td className="px-3 py-2">
+                      <div className="flex flex-col">
+                        <span className="font-medium">{stream.name}</span>
+                        {stream.basin_area_km2 != null && (
+                          <span className="text-xs text-slate-400">
+                            basin{" "}
+                            {stream.basin_area_km2.toLocaleString(undefined, {
+                              maximumFractionDigits: 0,
+                            })}{" "}
+                            km²
+                          </span>
+                        )}
+                      </div>
+                    </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-col">
                         <span>{gauge.name}</span>

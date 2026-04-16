@@ -27,6 +27,7 @@ _STREAMS_SQL = text(
         s.name          AS stream_name,
         s.wi_dnr_class  AS wi_dnr_class,
         s.is_watched    AS is_watched,
+        b.area_km2      AS basin_area_km2,
         g.usgs_site_id  AS site_id,
         g.name          AS gauge_name,
         sgl.relationship AS relationship,
@@ -37,6 +38,7 @@ _STREAMS_SQL = text(
     FROM streams s
     JOIN stream_gauge_links sgl ON sgl.stream_id = s.id
     JOIN gauges g ON g.usgs_site_id = sgl.usgs_site_id
+    LEFT JOIN basins b ON b.stream_id = s.id
     LEFT JOIN latest l ON l.gauge_id = g.usgs_site_id
     WHERE s.is_watched = true
     ORDER BY s.name, g.usgs_site_id, l.parameter_code
@@ -61,6 +63,11 @@ def list_streams(db: Session = Depends(get_db)) -> list[StreamOut]:
                 name=row["stream_name"],
                 wi_dnr_class=row["wi_dnr_class"],
                 is_watched=row["is_watched"],
+                basin_area_km2=(
+                    float(row["basin_area_km2"])
+                    if row["basin_area_km2"] is not None
+                    else None
+                ),
                 gauges=[],
             )
 

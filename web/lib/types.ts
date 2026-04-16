@@ -19,6 +19,7 @@ export type Stream = {
   name: string;
   wi_dnr_class: string | null;
   is_watched: boolean;
+  basin_area_km2: number | null;
   gauges: Gauge[];
 };
 

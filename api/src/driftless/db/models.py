@@ -1,12 +1,15 @@
-"""SQLAlchemy models for Phase 1.
+"""SQLAlchemy models.
 
-Phase-1 schema per README §5. Notes:
+Phase-1 schema per README §5, plus Phase-2 basin tables added in Chunk
+2a (``basins``, ``basin_characteristics``, ``basin_rainfall``).
+
+Notes:
 
 * ``gauge_readings`` is a single regular table here. README §5 calls for
-  monthly partitioning; that is deferred to Phase 2 where it will be
-  introduced via a dedicated migration.
-* ``stream_gauge_links`` is included now because the watch-list query in
-  Phase 1 needs a stream↔gauge mapping; every Phase-1 row has
+  monthly partitioning; that is deferred to a later Phase-2 chunk and
+  will be introduced via a dedicated migration.
+* ``stream_gauge_links`` is included because the watch-list query needs
+  a stream↔gauge mapping; for Phase 1 every row has
   ``relationship='on_stream'``.
 """
 
@@ -118,3 +121,77 @@ class StreamGaugeLink(Base):
 
     stream: Mapped[Stream] = relationship(back_populates="links")
     gauge: Mapped[Gauge] = relationship(back_populates="links")
+
+
+# ---------------------------------------------------------------------------
+# Phase 2 — basins
+# ---------------------------------------------------------------------------
+
+
+class Basin(Base):
+    __tablename__ = "basins"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    stream_id: Mapped[int] = mapped_column(
+        ForeignKey("streams.id", ondelete="CASCADE"), nullable=False, unique=True
+    )
+    polygon = mapped_column(Geometry("MULTIPOLYGON", srid=4326), nullable=False)
+    area_km2: Mapped[float | None] = mapped_column(Numeric(12, 3))
+    source: Mapped[str] = mapped_column(
+        String(40), nullable=False, server_default=text("'nldi_nwissite'")
+    )
+    source_site_id: Mapped[str | None] = mapped_column(String(20))
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    stream: Mapped[Stream] = relationship()
+    characteristics: Mapped["BasinCharacteristics | None"] = relationship(
+        back_populates="basin",
+        cascade="all, delete-orphan",
+        uselist=False,
+    )
+    rainfall: Mapped[list["BasinRainfall"]] = relationship(
+        back_populates="basin", cascade="all, delete-orphan"
+    )
+
+
+class BasinCharacteristics(Base):
+    __tablename__ = "basin_characteristics"
+
+    basin_id: Mapped[int] = mapped_column(
+        ForeignKey("basins.id", ondelete="CASCADE"), primary_key=True
+    )
+    pct_row_crop: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    pct_forest: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    pct_pasture: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    pct_developed: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    pct_wetland: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    baseflow_index: Mapped[float | None] = mapped_column(Numeric(5, 3))
+    mean_slope: Mapped[float | None] = mapped_column(Numeric(7, 3))
+    dominant_hsg: Mapped[str | None] = mapped_column(String(5))
+    runoff_curve_number: Mapped[float | None] = mapped_column(Numeric(5, 2))
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=text("now()")
+    )
+
+    basin: Mapped[Basin] = relationship(back_populates="characteristics")
+
+
+class BasinRainfall(Base):
+    __tablename__ = "basin_rainfall"
+
+    basin_id: Mapped[int] = mapped_column(
+        ForeignKey("basins.id", ondelete="CASCADE"), primary_key=True
+    )
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    rainfall_mm: Mapped[float | None] = mapped_column(Numeric(8, 3))
+    source: Mapped[str] = mapped_column(
+        String(40), nullable=False, server_default=text("'mrms_qpe_01h_pass2'")
+    )
+
+    basin: Mapped[Basin] = relationship(back_populates="rainfall")
+
+    __table_args__ = (
+        Index("ix_basin_rainfall_basin_ts_desc", "basin_id", text("ts DESC")),
+    )

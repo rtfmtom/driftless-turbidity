@@ -8,6 +8,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         build-essential \
         libpq5 \
         libgeos-dev \
+        libproj-dev \
+        libspatialindex-dev \
         curl \
     && rm -rf /var/lib/apt/lists/*
 

@@ -20,6 +20,11 @@ dependencies = [
     "dataretrieval>=1.0",
     "pandas>=2.0",
     "python-dotenv>=1.0",
+    # Geospatial — Phase 2 basin delineation.
+    "shapely>=2.0",
+    "pyproj>=3.6",
+    "geopandas>=0.14",
+    "pynhd>=0.16",
 ]
 
 [project.optional-dependencies]
