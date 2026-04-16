@@ -47,3 +47,53 @@ export type WatchCreateRequest = {
   stream_name?: string;
   relationship?: string;
 };
+
+export type ProjectionDetail = {
+  stream_id: number;
+  computed_at: string;
+  valid_from: string;
+  valid_to: string;
+  clarity_class: ClarityClass;
+  confidence: ClarityConfidence;
+  model_version: string;
+  feature_snapshot: Record<string, unknown>;
+};
+
+export type ProjectionPoint = {
+  computed_at: string;
+  clarity_class: ClarityClass;
+  confidence: ClarityConfidence;
+};
+
+export type ProjectionSeries = {
+  stream_id: number;
+  hours_requested: number;
+  points: ProjectionPoint[];
+};
+
+export type RainfallHour = { ts: string; rainfall_mm: number | null };
+
+export type RainfallSeries = {
+  stream_id: number;
+  basin_id: number;
+  basin_area_km2: number | null;
+  source: string;
+  hours_requested: number;
+  total_mm: number;
+  hours: RainfallHour[];
+};
+
+export type GaugeReadingPoint = {
+  ts: string;
+  parameter_code: string;
+  value: number | null;
+  qualifier: string | null;
+};
+
+export type GaugeReadingSeries = {
+  stream_id: number;
+  usgs_site_id: string;
+  parameter_codes: string[];
+  hours_requested: number;
+  points: GaugeReadingPoint[];
+};

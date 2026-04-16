@@ -1,4 +1,4 @@
-"""Schemas for /api/streams/{id}/projection."""
+"""Schemas for /api/streams/{id}/projection(s)."""
 
 from __future__ import annotations
 
@@ -17,3 +17,17 @@ class ProjectionOut(BaseModel):
     confidence: str
     model_version: str
     feature_snapshot: dict[str, Any]
+
+
+class ProjectionPointOut(BaseModel):
+    """Compact projection record for time-series rendering."""
+
+    computed_at: datetime
+    clarity_class: str
+    confidence: str
+
+
+class ProjectionSeriesOut(BaseModel):
+    stream_id: int
+    hours_requested: int
+    points: list[ProjectionPointOut]

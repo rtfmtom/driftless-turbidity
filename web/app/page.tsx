@@ -1,23 +1,43 @@
 "use client";
 
 import Link from "next/link";
+import dynamic from "next/dynamic";
 import { useCallback, useEffect, useState } from "react";
 
 import { StreamTable } from "@/components/StreamTable";
 import { apiGet } from "@/lib/api";
 import type { Stream } from "@/lib/types";
 
+// MapLibre touches `window` on import, so load the map only on the client.
+const BasinsMap = dynamic(
+  () => import("@/components/BasinsMap").then((m) => m.BasinsMap),
+  { ssr: false, loading: () => <MapPlaceholder /> }
+);
+
 const REFRESH_MS = 60_000;
+
+function MapPlaceholder() {
+  return (
+    <div className="flex h-[60vh] w-full items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400">
+      Loading map…
+    </div>
+  );
+}
 
 export default function HomePage() {
   const [streams, setStreams] = useState<Stream[] | null>(null);
+  const [basins, setBasins] = useState<GeoJSON.FeatureCollection | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState<boolean>(true);
 
   const load = useCallback(async () => {
     try {
-      const data = await apiGet<Stream[]>("/api/streams");
-      setStreams(data);
+      const [s, b] = await Promise.all([
+        apiGet<Stream[]>("/api/streams"),
+        apiGet<GeoJSON.FeatureCollection>("/api/basins"),
+      ]);
+      setStreams(s);
+      setBasins(b);
       setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -40,7 +60,7 @@ export default function HomePage() {
             Driftless Clarity — Watch List
           </h1>
           <p className="text-sm text-slate-600">
-            Live USGS readings refresh every minute.
+            Live USGS readings refresh every minute. Click a basin to drill in.
           </p>
         </div>
         <Link
@@ -53,9 +73,11 @@ export default function HomePage() {
 
       {error && (
         <div className="rounded border border-red-300 bg-red-50 p-3 text-sm text-red-700">
-          Failed to load streams: {error}
+          Failed to load: {error}
         </div>
       )}
+
+      <BasinsMap basins={basins} />
 
       {loading && streams === null ? (
         <div className="rounded border border-slate-200 bg-white p-6 text-slate-500">

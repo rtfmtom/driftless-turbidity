@@ -39,3 +39,18 @@ class StreamOut(BaseModel):
     clarity_confidence: ClarityConfidence | None = None
     clarity_computed_at: datetime | None = None
     gauges: list[GaugeOut]
+
+
+class GaugeReadingPoint(BaseModel):
+    ts: datetime
+    parameter_code: str
+    value: float | None
+    qualifier: str | None = None
+
+
+class GaugeReadingSeriesOut(BaseModel):
+    stream_id: int
+    usgs_site_id: str
+    parameter_codes: list[str]
+    hours_requested: int
+    points: list[GaugeReadingPoint]

@@ -1,35 +1,7 @@
-import type { ClarityClass, ClarityConfidence, Reading, Stream } from "@/lib/types";
+import Link from "next/link";
 
-const CLARITY_STYLE: Record<ClarityClass, string> = {
-  clear: "bg-emerald-100 text-emerald-800 ring-emerald-200",
-  tinged: "bg-yellow-100 text-yellow-800 ring-yellow-200",
-  stained: "bg-orange-100 text-orange-800 ring-orange-200",
-  blown: "bg-red-100 text-red-800 ring-red-200",
-};
-
-function ClarityBadge({
-  cls,
-  confidence,
-}: {
-  cls: ClarityClass | null;
-  confidence: ClarityConfidence | null;
-}) {
-  if (!cls) {
-    return <span className="text-slate-400">—</span>;
-  }
-  return (
-    <div className="flex flex-col gap-0.5">
-      <span
-        className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ring-1 ring-inset ${CLARITY_STYLE[cls]}`}
-      >
-        {cls}
-      </span>
-      {confidence && (
-        <span className="text-xs text-slate-400">{confidence} confidence</span>
-      )}
-    </div>
-  );
-}
+import { ClarityBadge } from "@/components/ClarityBadge";
+import type { Reading, Stream } from "@/lib/types";
 
 const PARAMS: { code: string; label: string; unit: string }[] = [
   { code: "00060", label: "Discharge", unit: "cfs" },
@@ -106,7 +78,12 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
                   <tr key={`${stream.id}-${gauge.usgs_site_id}`}>
                     <td className="px-3 py-2">
                       <div className="flex flex-col">
-                        <span className="font-medium">{stream.name}</span>
+                        <Link
+                          href={`/streams/${stream.id}`}
+                          className="font-medium text-slate-900 hover:underline"
+                        >
+                          {stream.name}
+                        </Link>
                         {stream.basin_area_km2 != null && (
                           <span className="text-xs text-slate-400">
                             basin{" "}

@@ -8,6 +8,7 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from driftless.api.routes_basins import basins_collection_router
 from driftless.api.routes_basins import router as basins_router
 from driftless.api.routes_gauges import router as gauges_router
 from driftless.api.routes_health import router as health_router
@@ -50,5 +51,6 @@ app.include_router(streams_router)
 app.include_router(gauges_router)
 app.include_router(watch_router)
 app.include_router(basins_router)
+app.include_router(basins_collection_router)
 app.include_router(rainfall_router)
 app.include_router(projections_router)
