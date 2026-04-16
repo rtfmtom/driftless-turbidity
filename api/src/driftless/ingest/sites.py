@@ -24,11 +24,13 @@ SEED_SITES: tuple[SeedSite, ...] = (
 
 # USGS NWIS parameter codes we care about. See README §4.1.
 # 00060 discharge (cfs), 00065 gauge height (ft), 00010 water temp (°C),
-# 63680 turbidity (FNU) — newer standard, and 63160 turbidity (TRU) —
-# older code still used at many Driftless stations (e.g. Kickapoo at
-# La Farge and Steuben). We poll both and treat them as equivalent
-# signals in the UI.
-PARAMETER_CODES: tuple[str, ...] = ("00060", "00065", "00010", "63680", "63160")
+# 63680 turbidity (FNU) — not present at every station.
+#
+# Note: 63160 is NOT turbidity. It's "Stream water level elevation above
+# NGVD 1929, in feet" — i.e. stage offset to a different datum. Several
+# Driftless stations publish it but it's redundant with 00065 for our
+# purposes, so we don't poll it.
+PARAMETER_CODES: tuple[str, ...] = ("00060", "00065", "00010", "63680")
 
 
 def seed_site_ids() -> list[str]:

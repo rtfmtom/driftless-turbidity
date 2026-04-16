@@ -63,8 +63,7 @@ export function BboxForm({ initial = DRIFTLESS_DEFAULT, onSubmit, disabled }: Pr
           <option value="00060">00060 — Discharge</option>
           <option value="00065">00065 — Stage</option>
           <option value="00010">00010 — Water temp</option>
-          <option value="63680">63680 — Turbidity (FNU)</option>
-          <option value="63160">63160 — Turbidity (TRU)</option>
+          <option value="63680">63680 — Turbidity</option>
         </select>
       </label>
       <button
