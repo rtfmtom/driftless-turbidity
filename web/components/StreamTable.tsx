@@ -82,6 +82,22 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
                               maximumFractionDigits: 0,
                             })}{" "}
                             km²
+                            {stream.pct_row_crop != null && (
+                              <> · {stream.pct_row_crop.toFixed(0)}% row crop</>
+                            )}
+                          </span>
+                        )}
+                        {(stream.dominant_hsg != null ||
+                          stream.runoff_curve_number != null) && (
+                          <span className="text-xs text-slate-400">
+                            {stream.dominant_hsg != null && (
+                              <>HSG {stream.dominant_hsg}</>
+                            )}
+                            {stream.dominant_hsg != null &&
+                              stream.runoff_curve_number != null && " · "}
+                            {stream.runoff_curve_number != null && (
+                              <>CN {stream.runoff_curve_number.toFixed(0)}</>
+                            )}
                           </span>
                         )}
                       </div>

@@ -29,15 +29,18 @@ _STREAMS_SQL = text(
         GROUP BY basin_id
     )
     SELECT
-        s.id            AS stream_id,
-        s.name          AS stream_name,
-        s.wi_dnr_class  AS wi_dnr_class,
-        s.is_watched    AS is_watched,
-        b.area_km2      AS basin_area_km2,
-        r.mm            AS rainfall_24h_mm,
-        g.usgs_site_id  AS site_id,
-        g.name          AS gauge_name,
-        sgl.relationship AS relationship,
+        s.id              AS stream_id,
+        s.name            AS stream_name,
+        s.wi_dnr_class    AS wi_dnr_class,
+        s.is_watched      AS is_watched,
+        b.area_km2        AS basin_area_km2,
+        bc.pct_row_crop   AS pct_row_crop,
+        bc.runoff_curve_number AS runoff_curve_number,
+        bc.dominant_hsg   AS dominant_hsg,
+        r.mm              AS rainfall_24h_mm,
+        g.usgs_site_id    AS site_id,
+        g.name            AS gauge_name,
+        sgl.relationship  AS relationship,
         l.parameter_code,
         l.ts,
         l.value,
@@ -46,6 +49,7 @@ _STREAMS_SQL = text(
     JOIN stream_gauge_links sgl ON sgl.stream_id = s.id
     JOIN gauges g ON g.usgs_site_id = sgl.usgs_site_id
     LEFT JOIN basins b ON b.stream_id = s.id
+    LEFT JOIN basin_characteristics bc ON bc.basin_id = b.id
     LEFT JOIN rain_24h r ON r.basin_id = b.id
     LEFT JOIN latest l ON l.gauge_id = g.usgs_site_id
     WHERE s.is_watched = true
@@ -76,6 +80,17 @@ def list_streams(db: Session = Depends(get_db)) -> list[StreamOut]:
                     if row["basin_area_km2"] is not None
                     else None
                 ),
+                pct_row_crop=(
+                    float(row["pct_row_crop"])
+                    if row["pct_row_crop"] is not None
+                    else None
+                ),
+                runoff_curve_number=(
+                    float(row["runoff_curve_number"])
+                    if row["runoff_curve_number"] is not None
+                    else None
+                ),
+                dominant_hsg=row["dominant_hsg"],
                 rainfall_24h_mm=(
                     float(row["rainfall_24h_mm"])
                     if row["rainfall_24h_mm"] is not None

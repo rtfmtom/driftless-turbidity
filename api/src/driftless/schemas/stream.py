@@ -27,5 +27,8 @@ class StreamOut(BaseModel):
     wi_dnr_class: str | None = None
     is_watched: bool
     basin_area_km2: float | None = None
+    pct_row_crop: float | None = None
+    runoff_curve_number: float | None = None
+    dominant_hsg: str | None = None
     rainfall_24h_mm: float | None = None
     gauges: list[GaugeOut]
