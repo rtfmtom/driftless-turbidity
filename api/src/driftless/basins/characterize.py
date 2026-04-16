@@ -34,12 +34,13 @@ import argparse
 import json
 import logging
 import urllib.error
+import urllib.parse
 import urllib.request
 from dataclasses import dataclass, field
 from typing import Iterable
 
 import numpy as np
-from shapely.geometry import shape
+from shapely.geometry import MultiPolygon, shape
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
@@ -137,15 +138,24 @@ def bucket_land_cover(pcts: dict[int, float]) -> dict[str, float]:
 
 _SDA_URL = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/SDMTabularService/post.rest"
 
-# A 0.001° simplification tolerance is ~110m at our latitude — well below
-# SSURGO's polygon precision and keeps the WKT POST body well under the
-# SDA query length limit even for the 1,800 km² Steuben basin.
-_SDA_SIMPLIFY_TOLERANCE = 0.001
+# 0.005° ≈ 500m — well below SSURGO mapunit polygon resolution and keeps
+# the WKT POST body small enough for SDA's query length limit on basins
+# up to a few thousand km².
+_SDA_SIMPLIFY_TOLERANCE = 0.005
+
+
+def _largest_polygon(geom):
+    """SDA's ``with_WktWgs84`` helper expects a POLYGON, not a MULTIPOLYGON.
+    Our delineated basins are single-part — strip the MULTIPOLYGON wrapper
+    or pick the largest part if multi-part."""
+    if isinstance(geom, MultiPolygon):
+        return max(geom.geoms, key=lambda g: g.area)
+    return geom
 
 
 def fetch_hsg_distribution(geom, timeout: int = 60) -> dict[str, float]:
     """Query USDA Soil Data Access for the area-weighted HSG distribution
-    inside ``geom``. Returns ``{letter: pct}``; empty dict on failure.
+    inside ``geom``. Returns ``{letter: pct}``; empty dict on no data.
 
     Uses the SDA spatial helper ``SDA_Get_Mukey_from_intersection_with_WktWgs84``
     to find map units intersecting the basin, joins to ``component``
@@ -153,9 +163,13 @@ def fetch_hsg_distribution(geom, timeout: int = 60) -> dict[str, float]:
     Dual classes ('A/D','B/D','C/D') are reported as their drained
     letter ('A','B','C') for cleanliness — the NRCS CN table treats
     them this way too.
+
+    SDA's REST endpoint accepts ``application/x-www-form-urlencoded``
+    with ``format`` and ``query`` fields, not a JSON body.
     """
-    geom_simple = geom.simplify(_SDA_SIMPLIFY_TOLERANCE, preserve_topology=True)
-    wkt = geom_simple.wkt
+    poly = _largest_polygon(geom)
+    poly_simple = poly.simplify(_SDA_SIMPLIFY_TOLERANCE, preserve_topology=True)
+    wkt = poly_simple.wkt
 
     sql = (
         "SELECT co.hydgrpdcd AS hsg, SUM(co.comppct_r) AS weight "
@@ -164,35 +178,53 @@ def fetch_hsg_distribution(geom, timeout: int = 60) -> dict[str, float]:
         "WHERE co.majcompflag = 'Yes' AND co.hydgrpdcd IS NOT NULL "
         "GROUP BY co.hydgrpdcd"
     )
-    body = json.dumps({"FORMAT": "JSON", "QUERY": sql}).encode("utf-8")
+    body = urllib.parse.urlencode({"format": "JSON", "query": sql}).encode("utf-8")
     req = urllib.request.Request(
         _SDA_URL,
         data=body,
-        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        headers={
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        },
         method="POST",
     )
+
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
-            payload = json.loads(resp.read().decode("utf-8"))
-    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as exc:
-        raise RuntimeError(f"SDA request failed: {exc}") from exc
+            raw_text = resp.read().decode("utf-8")
+    except urllib.error.HTTPError as exc:
+        # Read error body so we can see SDA's actual complaint.
+        try:
+            err_body = exc.read().decode("utf-8", errors="replace")[:400]
+        except Exception:  # noqa: BLE001
+            err_body = ""
+        raise RuntimeError(
+            f"SDA HTTP {exc.code}: {exc.reason} (wkt_chars={len(wkt)}, body_excerpt={err_body!r})"
+        ) from exc
+    except urllib.error.URLError as exc:
+        raise RuntimeError(f"SDA network error: {exc}") from exc
+
+    try:
+        payload = json.loads(raw_text)
+    except json.JSONDecodeError as exc:
+        raise RuntimeError(f"SDA returned non-JSON: {raw_text[:200]!r}") from exc
 
     rows = payload.get("Table") or []
     if not rows:
         return {}
 
-    # SDA "JSON" format returns: [[col1, col2], [val1, val2], ...]. The first
-    # row is column names; subsequent rows are data.
     raw: dict[str, float] = {}
-    for row in rows[1:]:
+    for row in rows:
         if not row or row[0] is None:
             continue
         letter_raw = str(row[0]).strip()
+        # Skip a header row if SDA included one.
+        if letter_raw.lower() in {"hsg", "hydgrpdcd"}:
+            continue
         try:
             weight = float(row[1])
         except (TypeError, ValueError):
             continue
-        # Map dual classes to their drained letter.
         letter = {"A/D": "A", "B/D": "B", "C/D": "C"}.get(letter_raw, letter_raw)
         raw[letter] = raw.get(letter, 0.0) + weight
 
