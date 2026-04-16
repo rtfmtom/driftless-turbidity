@@ -111,8 +111,11 @@ export function BasinsMap({
           type: "line",
           source: "basins",
           paint: {
-            "line-color": fillColor,
-            "line-width": 1.5,
+            // Dark, solid outline so nested basins with the same clarity
+            // color still have a visible boundary.
+            "line-color": "#1e293b", // slate-800
+            "line-width": 1.25,
+            "line-opacity": 0.7,
           },
         });
 

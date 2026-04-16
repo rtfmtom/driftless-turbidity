@@ -40,7 +40,10 @@ _BASINS_FC_SQL = text(
     LEFT JOIN basin_characteristics bc ON bc.basin_id = b.id
     LEFT JOIN latest_projection lp ON lp.stream_id = s.id
     WHERE s.is_watched = true
-    ORDER BY s.name
+    -- Nested Driftless basins (Steuben ⊃ La Farge ⊃ Ontario) — render
+    -- largest first so smaller/inner basins stay on top and remain
+    -- hoverable/clickable in MapLibre's hit-testing.
+    ORDER BY b.area_km2 DESC NULLS LAST
     """
 )
 
