@@ -1,0 +1,40 @@
+# Multi-stage production build for the Next.js app.
+#
+# Used via docker-compose.prod.yml which points `web.build.dockerfile` here.
+# The default Dockerfile stays dev-mode so local `docker compose up` is fast.
+
+FROM node:20-alpine AS deps
+WORKDIR /app
+COPY package.json ./
+RUN npm install
+
+FROM node:20-alpine AS build
+WORKDIR /app
+
+# NEXT_PUBLIC_* env vars are baked into the client bundle at build time.
+# Default to empty so the frontend uses same-origin relative URLs (the
+# Caddy reverse proxy in front handles the /api/* → backend mapping).
+ARG NEXT_PUBLIC_API_URL=""
+ENV NEXT_PUBLIC_API_URL=${NEXT_PUBLIC_API_URL}
+
+COPY --from=deps /app/node_modules ./node_modules
+COPY package.json tsconfig.json next.config.mjs postcss.config.mjs tailwind.config.ts .eslintrc.json ./
+COPY app ./app
+COPY components ./components
+COPY lib ./lib
+COPY public ./public
+
+RUN npm run build
+
+FROM node:20-alpine AS runner
+WORKDIR /app
+ENV NODE_ENV=production
+
+COPY --from=build /app/.next ./.next
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/package.json ./package.json
+COPY --from=build /app/next.config.mjs ./next.config.mjs
+COPY --from=build /app/public ./public
+
+EXPOSE 3000
+CMD ["npm", "run", "start"]
