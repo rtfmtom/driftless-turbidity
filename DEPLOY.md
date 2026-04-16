@@ -101,7 +101,6 @@ caddy version
 mkdir -p /opt && cd /opt
 git clone https://github.com/rtfmtom/driftless-turbidity.git
 cd driftless-turbidity
-git checkout claude/build-from-readme-Xgnl1
 
 # Generate a strong DB password
 PG_PASS=$(openssl rand -base64 32 | tr -d '/+=' | head -c 32)
