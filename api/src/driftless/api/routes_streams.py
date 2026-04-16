@@ -27,20 +27,29 @@ _STREAMS_SQL = text(
         FROM basin_rainfall
         WHERE ts >= NOW() - INTERVAL '24 hours'
         GROUP BY basin_id
+    ),
+    latest_projection AS (
+        SELECT DISTINCT ON (stream_id)
+               stream_id, computed_at, clarity_class, confidence
+        FROM projections
+        ORDER BY stream_id, computed_at DESC
     )
     SELECT
-        s.id              AS stream_id,
-        s.name            AS stream_name,
-        s.wi_dnr_class    AS wi_dnr_class,
-        s.is_watched      AS is_watched,
-        b.area_km2        AS basin_area_km2,
-        bc.pct_row_crop   AS pct_row_crop,
-        bc.runoff_curve_number AS runoff_curve_number,
-        bc.dominant_hsg   AS dominant_hsg,
-        r.mm              AS rainfall_24h_mm,
-        g.usgs_site_id    AS site_id,
-        g.name            AS gauge_name,
-        sgl.relationship  AS relationship,
+        s.id                    AS stream_id,
+        s.name                  AS stream_name,
+        s.wi_dnr_class          AS wi_dnr_class,
+        s.is_watched            AS is_watched,
+        b.area_km2              AS basin_area_km2,
+        bc.pct_row_crop         AS pct_row_crop,
+        bc.runoff_curve_number  AS runoff_curve_number,
+        bc.dominant_hsg         AS dominant_hsg,
+        r.mm                    AS rainfall_24h_mm,
+        lp.clarity_class        AS clarity_class,
+        lp.confidence           AS clarity_confidence,
+        lp.computed_at          AS clarity_computed_at,
+        g.usgs_site_id          AS site_id,
+        g.name                  AS gauge_name,
+        sgl.relationship        AS relationship,
         l.parameter_code,
         l.ts,
         l.value,
@@ -51,6 +60,7 @@ _STREAMS_SQL = text(
     LEFT JOIN basins b ON b.stream_id = s.id
     LEFT JOIN basin_characteristics bc ON bc.basin_id = b.id
     LEFT JOIN rain_24h r ON r.basin_id = b.id
+    LEFT JOIN latest_projection lp ON lp.stream_id = s.id
     LEFT JOIN latest l ON l.gauge_id = g.usgs_site_id
     WHERE s.is_watched = true
     ORDER BY s.name, g.usgs_site_id, l.parameter_code
@@ -96,6 +106,9 @@ def list_streams(db: Session = Depends(get_db)) -> list[StreamOut]:
                     if row["rainfall_24h_mm"] is not None
                     else None
                 ),
+                clarity_class=row["clarity_class"],
+                clarity_confidence=row["clarity_confidence"],
+                clarity_computed_at=row["clarity_computed_at"],
                 gauges=[],
             )
 

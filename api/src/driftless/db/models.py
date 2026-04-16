@@ -195,3 +195,29 @@ class BasinRainfall(Base):
     __table_args__ = (
         Index("ix_basin_rainfall_basin_ts_desc", "basin_id", text("ts DESC")),
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 3 — projections
+# ---------------------------------------------------------------------------
+
+
+class Projection(Base):
+    __tablename__ = "projections"
+
+    stream_id: Mapped[int] = mapped_column(
+        ForeignKey("streams.id", ondelete="CASCADE"), primary_key=True
+    )
+    computed_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), primary_key=True
+    )
+    valid_from: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    valid_to: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    clarity_class: Mapped[str] = mapped_column(String(20), nullable=False)
+    confidence: Mapped[str] = mapped_column(String(10), nullable=False)
+    feature_snapshot: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    model_version: Mapped[str] = mapped_column(String(40), nullable=False)
+
+    stream: Mapped[Stream] = relationship()

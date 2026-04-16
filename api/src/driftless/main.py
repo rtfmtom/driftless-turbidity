@@ -11,6 +11,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from driftless.api.routes_basins import router as basins_router
 from driftless.api.routes_gauges import router as gauges_router
 from driftless.api.routes_health import router as health_router
+from driftless.api.routes_projections import router as projections_router
 from driftless.api.routes_rainfall import router as rainfall_router
 from driftless.api.routes_streams import router as streams_router
 from driftless.api.routes_watch import router as watch_router
@@ -50,3 +51,4 @@ app.include_router(gauges_router)
 app.include_router(watch_router)
 app.include_router(basins_router)
 app.include_router(rainfall_router)
+app.include_router(projections_router)

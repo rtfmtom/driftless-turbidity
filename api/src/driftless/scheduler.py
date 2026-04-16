@@ -13,6 +13,7 @@ from apscheduler.triggers.interval import IntervalTrigger
 from driftless.config import get_settings
 from driftless.ingest.mrms import ingest_once_job as mrms_ingest_once_job
 from driftless.ingest.usgs import ingest_once_job, ingest_one_site_job
+from driftless.projection.heuristic import project_once_job
 
 logger = logging.getLogger(__name__)
 
@@ -20,6 +21,7 @@ _scheduler: BackgroundScheduler | None = None
 
 USGS_JOB_ID = "usgs_iv_ingest"
 MRMS_JOB_ID = "mrms_hourly_ingest"
+PROJECTION_JOB_ID = "projection_hourly"
 
 
 def _ensure_scheduler() -> BackgroundScheduler:
@@ -64,6 +66,19 @@ def start_scheduler() -> None:
                 replace_existing=True,
             )
             logger.info("Scheduled MRMS hourly ingest at HH:15 UTC")
+
+        # Run heuristic projection a few minutes after MRMS lands so we
+        # always project on the most recent hour's rainfall.
+        scheduler.add_job(
+            project_once_job,
+            trigger=CronTrigger(minute=20, timezone="UTC"),
+            id=PROJECTION_JOB_ID,
+            next_run_time=datetime.now(timezone.utc) + timedelta(seconds=20),
+            coalesce=True,
+            max_instances=1,
+            replace_existing=True,
+        )
+        logger.info("Scheduled hourly projection job at HH:20 UTC")
 
     if not scheduler.running:
         scheduler.start()

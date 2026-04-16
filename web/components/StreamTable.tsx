@@ -1,4 +1,35 @@
-import type { Reading, Stream } from "@/lib/types";
+import type { ClarityClass, ClarityConfidence, Reading, Stream } from "@/lib/types";
+
+const CLARITY_STYLE: Record<ClarityClass, string> = {
+  clear: "bg-emerald-100 text-emerald-800 ring-emerald-200",
+  tinged: "bg-yellow-100 text-yellow-800 ring-yellow-200",
+  stained: "bg-orange-100 text-orange-800 ring-orange-200",
+  blown: "bg-red-100 text-red-800 ring-red-200",
+};
+
+function ClarityBadge({
+  cls,
+  confidence,
+}: {
+  cls: ClarityClass | null;
+  confidence: ClarityConfidence | null;
+}) {
+  if (!cls) {
+    return <span className="text-slate-400">—</span>;
+  }
+  return (
+    <div className="flex flex-col gap-0.5">
+      <span
+        className={`inline-flex w-fit items-center rounded px-2 py-0.5 text-xs font-semibold uppercase tracking-wide ring-1 ring-inset ${CLARITY_STYLE[cls]}`}
+      >
+        {cls}
+      </span>
+      {confidence && (
+        <span className="text-xs text-slate-400">{confidence} confidence</span>
+      )}
+    </div>
+  );
+}
 
 const PARAMS: { code: string; label: string; unit: string }[] = [
   { code: "00060", label: "Discharge", unit: "cfs" },
@@ -41,6 +72,7 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
         <thead className="bg-slate-100 text-left text-slate-600">
           <tr>
             <th className="px-3 py-2">Stream</th>
+            <th className="px-3 py-2">Clarity</th>
             <th className="px-3 py-2">Gauge</th>
             {PARAMS.map((p) => (
               <th key={p.code} className="px-3 py-2">
@@ -65,7 +97,7 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
               ? [
                   <tr key={`${stream.id}-empty`}>
                     <td className="px-3 py-2 font-medium">{stream.name}</td>
-                    <td className="px-3 py-2 text-slate-400" colSpan={PARAMS.length + 3}>
+                    <td className="px-3 py-2 text-slate-400" colSpan={PARAMS.length + 4}>
                       No linked gauges
                     </td>
                   </tr>,
@@ -101,6 +133,12 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
                           </span>
                         )}
                       </div>
+                    </td>
+                    <td className="px-3 py-2">
+                      <ClarityBadge
+                        cls={stream.clarity_class}
+                        confidence={stream.clarity_confidence}
+                      />
                     </td>
                     <td className="px-3 py-2">
                       <div className="flex flex-col">

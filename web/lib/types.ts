@@ -14,6 +14,9 @@ export type Gauge = {
   latest_readings: Reading[];
 };
 
+export type ClarityClass = "clear" | "tinged" | "stained" | "blown";
+export type ClarityConfidence = "low" | "medium" | "high";
+
 export type Stream = {
   id: number;
   name: string;
@@ -24,6 +27,9 @@ export type Stream = {
   runoff_curve_number: number | null;
   dominant_hsg: string | null;
   rainfall_24h_mm: number | null;
+  clarity_class: ClarityClass | null;
+  clarity_confidence: ClarityConfidence | null;
+  clarity_computed_at: string | null;
   gauges: Gauge[];
 };
 

@@ -3,8 +3,12 @@
 from __future__ import annotations
 
 from datetime import datetime
+from typing import Literal
 
 from pydantic import BaseModel
+
+ClarityClass = Literal["clear", "tinged", "stained", "blown"]
+ClarityConfidence = Literal["low", "medium", "high"]
 
 
 class ReadingOut(BaseModel):
@@ -31,4 +35,7 @@ class StreamOut(BaseModel):
     runoff_curve_number: float | None = None
     dominant_hsg: str | None = None
     rainfall_24h_mm: float | None = None
+    clarity_class: ClarityClass | None = None
+    clarity_confidence: ClarityConfidence | None = None
+    clarity_computed_at: datetime | None = None
     gauges: list[GaugeOut]
