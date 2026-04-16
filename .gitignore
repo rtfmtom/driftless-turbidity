@@ -214,3 +214,11 @@ api/.venv
 data/
 .env
 
+# The generic Python template above ignores `lib/` and `build/` at any
+# depth; re-include our web app's paths.
+!web/lib/
+!web/lib/**
+!web/components/**
+!web/app/**
+!web/public/**
+
