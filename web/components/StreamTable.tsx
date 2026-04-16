@@ -38,6 +38,24 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
     );
   }
 
+  // Hide columns that are empty across every row in the current data set.
+  // Self-healing: the moment a newly-added gauge starts reporting a
+  // parameter (e.g., turbidity at Wisconsin R at Muscoda), its column
+  // reappears without a code change.
+  const visibleParams = PARAMS.filter((p) =>
+    streams.some((s) =>
+      s.gauges.some((g) =>
+        g.latest_readings.some(
+          (r) => r.parameter_code === p.code && r.value != null
+        )
+      )
+    )
+  );
+  const showRain24h = streams.some((s) => s.rainfall_24h_mm != null);
+
+  // Stream + Clarity + Gauge + param cols + optional rain + Last-updated
+  const colCount = 3 + visibleParams.length + (showRain24h ? 1 : 0) + 1;
+
   return (
     <div className="overflow-x-auto rounded border border-slate-200 bg-white">
       <table className="min-w-full divide-y divide-slate-200 text-sm">
@@ -46,7 +64,7 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
             <th className="px-3 py-2">Stream</th>
             <th className="px-3 py-2">Clarity</th>
             <th className="px-3 py-2">Gauge</th>
-            {PARAMS.map((p) => (
+            {visibleParams.map((p) => (
               <th key={p.code} className="px-3 py-2">
                 {p.label}
                 <span className="ml-1 text-xs font-normal text-slate-400">
@@ -54,12 +72,14 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
                 </span>
               </th>
             ))}
-            <th className="px-3 py-2">
-              Rain 24h
-              <span className="ml-1 text-xs font-normal text-slate-400">
-                (mm)
-              </span>
-            </th>
+            {showRain24h && (
+              <th className="px-3 py-2">
+                Rain 24h
+                <span className="ml-1 text-xs font-normal text-slate-400">
+                  (mm)
+                </span>
+              </th>
+            )}
             <th className="px-3 py-2">Last updated</th>
           </tr>
         </thead>
@@ -69,7 +89,7 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
               ? [
                   <tr key={`${stream.id}-empty`}>
                     <td className="px-3 py-2 font-medium">{stream.name}</td>
-                    <td className="px-3 py-2 text-slate-400" colSpan={PARAMS.length + 4}>
+                    <td className="px-3 py-2 text-slate-400" colSpan={colCount - 1}>
                       No linked gauges
                     </td>
                   </tr>,
@@ -128,18 +148,20 @@ export function StreamTable({ streams }: { streams: Stream[] }) {
                         </span>
                       </div>
                     </td>
-                    {PARAMS.map((p) => (
+                    {visibleParams.map((p) => (
                       <td key={p.code} className="px-3 py-2 tabular-nums">
                         {formatValue(findReading(gauge.latest_readings, p.code))}
                       </td>
                     ))}
-                    <td className="px-3 py-2 tabular-nums">
-                      {stream.rainfall_24h_mm != null
-                        ? stream.rainfall_24h_mm.toLocaleString(undefined, {
-                            maximumFractionDigits: 1,
-                          })
-                        : "—"}
-                    </td>
+                    {showRain24h && (
+                      <td className="px-3 py-2 tabular-nums">
+                        {stream.rainfall_24h_mm != null
+                          ? stream.rainfall_24h_mm.toLocaleString(undefined, {
+                              maximumFractionDigits: 1,
+                            })
+                          : "—"}
+                      </td>
+                    )}
                     <td className="px-3 py-2 text-xs text-slate-500">
                       {latestTs(gauge.latest_readings)}
                     </td>
