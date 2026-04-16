@@ -159,7 +159,7 @@ def fetch_hsg_distribution(geom, timeout: int = 60) -> dict[str, float]:
 
     Uses the SDA spatial helper ``SDA_Get_Mukey_from_intersection_with_WktWgs84``
     to find map units intersecting the basin, joins to ``component``
-    for ``hydgrpdcd``, and aggregates by component-percentage weight.
+    for ``hydgrp``, and aggregates by component-percentage weight.
     Dual classes ('A/D','B/D','C/D') are reported as their drained
     letter ('A','B','C') for cleanliness — the NRCS CN table treats
     them this way too.
@@ -172,11 +172,11 @@ def fetch_hsg_distribution(geom, timeout: int = 60) -> dict[str, float]:
     wkt = poly_simple.wkt
 
     sql = (
-        "SELECT co.hydgrpdcd AS hsg, SUM(co.comppct_r) AS weight "
+        "SELECT co.hydgrp AS hsg, SUM(co.comppct_r) AS weight "
         "FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('" + wkt + "') AS m "
         "INNER JOIN component co ON co.mukey = m.mukey "
-        "WHERE co.majcompflag = 'Yes' AND co.hydgrpdcd IS NOT NULL "
-        "GROUP BY co.hydgrpdcd"
+        "WHERE co.majcompflag = 'Yes' AND co.hydgrp IS NOT NULL "
+        "GROUP BY co.hydgrp"
     )
     body = urllib.parse.urlencode({"format": "JSON", "query": sql}).encode("utf-8")
     req = urllib.request.Request(
@@ -219,7 +219,7 @@ def fetch_hsg_distribution(geom, timeout: int = 60) -> dict[str, float]:
             continue
         letter_raw = str(row[0]).strip()
         # Skip a header row if SDA included one.
-        if letter_raw.lower() in {"hsg", "hydgrpdcd"}:
+        if letter_raw.lower() in {"hsg", "hydgrp"}:
             continue
         try:
             weight = float(row[1])
