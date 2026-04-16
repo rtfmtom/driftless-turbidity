@@ -1,0 +1,120 @@
+"""SQLAlchemy models for Phase 1.
+
+Phase-1 schema per README §5. Notes:
+
+* ``gauge_readings`` is a single regular table here. README §5 calls for
+  monthly partitioning; that is deferred to Phase 2 where it will be
+  introduced via a dedicated migration.
+* ``stream_gauge_links`` is included now because the watch-list query in
+  Phase 1 needs a stream↔gauge mapping; every Phase-1 row has
+  ``relationship='on_stream'``.
+"""
+
+from __future__ import annotations
+
+from datetime import datetime
+from typing import Any
+
+from geoalchemy2 import Geometry
+from sqlalchemy import (
+    Boolean,
+    DateTime,
+    ForeignKey,
+    Index,
+    Numeric,
+    String,
+    Text,
+    text,
+)
+from sqlalchemy.dialects.postgresql import JSONB
+from sqlalchemy.orm import Mapped, mapped_column, relationship
+from sqlalchemy.sql import func
+
+from driftless.db.base import Base
+
+
+class Stream(Base):
+    __tablename__ = "streams"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False, unique=True)
+    waterbody_type: Mapped[str | None] = mapped_column(String(50))
+    wi_dnr_class: Mapped[str | None] = mapped_column(String(20))
+    notes: Mapped[str | None] = mapped_column(Text)
+    is_watched: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, server_default=text("true")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    links: Mapped[list["StreamGaugeLink"]] = relationship(
+        back_populates="stream", cascade="all, delete-orphan"
+    )
+
+
+class Gauge(Base):
+    __tablename__ = "gauges"
+
+    usgs_site_id: Mapped[str] = mapped_column(String(20), primary_key=True)
+    name: Mapped[str] = mapped_column(String(200), nullable=False)
+    location = mapped_column(Geometry("POINT", srid=4326), nullable=True)
+    parameters_available: Mapped[dict[str, Any]] = mapped_column(
+        JSONB, nullable=False, server_default=text("'{}'::jsonb")
+    )
+    created_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, server_default=func.now()
+    )
+
+    readings: Mapped[list["GaugeReading"]] = relationship(
+        back_populates="gauge", cascade="all, delete-orphan"
+    )
+    links: Mapped[list["StreamGaugeLink"]] = relationship(
+        back_populates="gauge", cascade="all, delete-orphan"
+    )
+
+
+class GaugeReading(Base):
+    __tablename__ = "gauge_readings"
+
+    gauge_id: Mapped[str] = mapped_column(
+        String(20),
+        ForeignKey("gauges.usgs_site_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    ts: Mapped[datetime] = mapped_column(DateTime(timezone=True), primary_key=True)
+    parameter_code: Mapped[str] = mapped_column(String(10), primary_key=True)
+    value: Mapped[float | None] = mapped_column(Numeric(14, 4))
+    qualifier: Mapped[str | None] = mapped_column(String(20))
+
+    gauge: Mapped[Gauge] = relationship(back_populates="readings")
+
+    __table_args__ = (
+        Index(
+            "ix_gauge_readings_gauge_param_ts_desc",
+            "gauge_id",
+            "parameter_code",
+            text("ts DESC"),
+        ),
+    )
+
+
+class StreamGaugeLink(Base):
+    __tablename__ = "stream_gauge_links"
+
+    stream_id: Mapped[int] = mapped_column(
+        ForeignKey("streams.id", ondelete="CASCADE"), primary_key=True
+    )
+    usgs_site_id: Mapped[str] = mapped_column(
+        String(20),
+        ForeignKey("gauges.usgs_site_id", ondelete="CASCADE"),
+        primary_key=True,
+    )
+    relationship_kind: Mapped[str] = mapped_column(
+        "relationship", String(20), nullable=False, server_default=text("'on_stream'")
+    )
+    distance_km: Mapped[float | None] = mapped_column(Numeric(8, 3))
+    similarity_score: Mapped[float | None] = mapped_column(Numeric(5, 3))
+
+    stream: Mapped[Stream] = relationship(back_populates="links")
+    gauge: Mapped[Gauge] = relationship(back_populates="links")
