@@ -10,6 +10,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libgeos-dev \
         libproj-dev \
         libspatialindex-dev \
+        libexpat1 \
+        libxml2 \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
