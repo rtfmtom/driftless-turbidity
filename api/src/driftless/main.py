@@ -8,8 +8,10 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
+from driftless.api.routes_gauges import router as gauges_router
 from driftless.api.routes_health import router as health_router
 from driftless.api.routes_streams import router as streams_router
+from driftless.api.routes_watch import router as watch_router
 from driftless.config import get_settings
 from driftless.scheduler import shutdown_scheduler, start_scheduler
 
@@ -42,3 +44,5 @@ app.add_middleware(
 
 app.include_router(health_router)
 app.include_router(streams_router)
+app.include_router(gauges_router)
+app.include_router(watch_router)
