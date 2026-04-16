@@ -20,6 +20,7 @@ export type Stream = {
   wi_dnr_class: string | null;
   is_watched: boolean;
   basin_area_km2: number | null;
+  rainfall_24h_mm: number | null;
   gauges: Gauge[];
 };
 

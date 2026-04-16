@@ -21,6 +21,12 @@ _STREAMS_SQL = text(
                gauge_id, parameter_code, ts, value, qualifier
         FROM gauge_readings
         ORDER BY gauge_id, parameter_code, ts DESC
+    ),
+    rain_24h AS (
+        SELECT basin_id, SUM(rainfall_mm) AS mm
+        FROM basin_rainfall
+        WHERE ts >= NOW() - INTERVAL '24 hours'
+        GROUP BY basin_id
     )
     SELECT
         s.id            AS stream_id,
@@ -28,6 +34,7 @@ _STREAMS_SQL = text(
         s.wi_dnr_class  AS wi_dnr_class,
         s.is_watched    AS is_watched,
         b.area_km2      AS basin_area_km2,
+        r.mm            AS rainfall_24h_mm,
         g.usgs_site_id  AS site_id,
         g.name          AS gauge_name,
         sgl.relationship AS relationship,
@@ -39,6 +46,7 @@ _STREAMS_SQL = text(
     JOIN stream_gauge_links sgl ON sgl.stream_id = s.id
     JOIN gauges g ON g.usgs_site_id = sgl.usgs_site_id
     LEFT JOIN basins b ON b.stream_id = s.id
+    LEFT JOIN rain_24h r ON r.basin_id = b.id
     LEFT JOIN latest l ON l.gauge_id = g.usgs_site_id
     WHERE s.is_watched = true
     ORDER BY s.name, g.usgs_site_id, l.parameter_code
@@ -66,6 +74,11 @@ def list_streams(db: Session = Depends(get_db)) -> list[StreamOut]:
                 basin_area_km2=(
                     float(row["basin_area_km2"])
                     if row["basin_area_km2"] is not None
+                    else None
+                ),
+                rainfall_24h_mm=(
+                    float(row["rainfall_24h_mm"])
+                    if row["rainfall_24h_mm"] is not None
                     else None
                 ),
                 gauges=[],

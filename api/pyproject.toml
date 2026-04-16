@@ -25,6 +25,13 @@ dependencies = [
     "pyproj>=3.6",
     "geopandas>=0.14",
     "pynhd>=0.16",
+    # Rainfall ingest — Phase 2b MRMS GRIB2 from s3://noaa-mrms-pds.
+    "boto3>=1.34",
+    "xarray>=2024.1",
+    "rioxarray>=0.15",
+    "cfgrib>=0.9.10",
+    "eccodes>=2.35",
+    "numpy>=1.26",
 ]
 
 [project.optional-dependencies]

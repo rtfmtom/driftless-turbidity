@@ -12,6 +12,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
         libspatialindex-dev \
         libexpat1 \
         libxml2 \
+        libeccodes0 \
+        libeccodes-data \
         curl \
     && rm -rf /var/lib/apt/lists/*
 
