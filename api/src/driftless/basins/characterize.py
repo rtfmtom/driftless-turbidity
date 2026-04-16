@@ -1,13 +1,18 @@
-"""Static basin characteristics: NLCD land cover, SSURGO/gNATSGO soils, 3DEP slope.
+"""Static basin characteristics: NLCD land cover, SSURGO soils, 3DEP slope.
 
 For each delineated basin we compute:
 
 * % land cover by broad class (row crop, forest, pasture, developed,
   wetland) — NLCD 2021 via ``pygeohydro.nlcd_bygeom``.
-* Dominant hydrologic soil group — gNATSGO ``hydclprs`` via
-  ``pygeohydro.soil_gnatsgo``.
-* Average runoff curve number — pixel-wise NLCD × HSG lookup from
-  ``cn_lookup.py``.
+* Dominant hydrologic soil group — area-weighted from USDA Soil Data
+  Access (SDA) REST. The ``gnatsgo-rasters`` collection on the Microsoft
+  Planetary Computer doesn't expose HSG as a band; HSG only lives in
+  SDA's tabular ``component`` table joined by mukey, so we query SDA
+  directly.
+* Average runoff curve number — pixel-wise NLCD lookup against the
+  basin's dominant HSG via ``cn_lookup.py``. Approximates HSG as
+  spatially uniform within the basin (the strongest HSG variability in
+  the Driftless is captured by the dominant-class assignment anyway).
 * Mean slope (degrees) — 3DEP DEM via ``py3dep.get_map``, with a
   gradient-based slope computation.
 
@@ -28,6 +33,8 @@ from __future__ import annotations
 import argparse
 import json
 import logging
+import urllib.error
+import urllib.request
 from dataclasses import dataclass, field
 from typing import Iterable
 
@@ -36,7 +43,7 @@ from shapely.geometry import shape
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
-from driftless.basins.cn_lookup import HSG_CODE_TO_LETTER, cn_for
+from driftless.basins.cn_lookup import cn_for
 from driftless.db.models import Basin, BasinCharacteristics
 from driftless.db.session import SessionLocal
 
@@ -124,48 +131,81 @@ def bucket_land_cover(pcts: dict[int, float]) -> dict[str, float]:
 
 
 # ---------------------------------------------------------------------------
-# Step 2: Hydrologic soil group (gNATSGO)
+# Step 2: Hydrologic soil group (USDA Soil Data Access REST)
 # ---------------------------------------------------------------------------
 
 
-def fetch_hsg(geom):
-    """Return an xarray DataArray of the gNATSGO hydrologic-group class.
+_SDA_URL = "https://sdmdataaccess.sc.egov.usda.gov/Tabular/SDMTabularService/post.rest"
 
-    Pass the shapely geometry directly — feeding a GeoDataFrame triggers
-    pygeohydro to call ``GeoDataFrame.bounds`` (which returns a per-row
-    DataFrame), and pystac-client's bbox formatter can't flatten that to
-    4 floats. A bare Polygon/MultiPolygon goes through ``geo2polygon``
-    cleanly and ``.bounds`` returns a 4-tuple as expected.
+# A 0.001° simplification tolerance is ~110m at our latitude — well below
+# SSURGO's polygon precision and keeps the WKT POST body well under the
+# SDA query length limit even for the 1,800 km² Steuben basin.
+_SDA_SIMPLIFY_TOLERANCE = 0.001
+
+
+def fetch_hsg_distribution(geom, timeout: int = 60) -> dict[str, float]:
+    """Query USDA Soil Data Access for the area-weighted HSG distribution
+    inside ``geom``. Returns ``{letter: pct}``; empty dict on failure.
+
+    Uses the SDA spatial helper ``SDA_Get_Mukey_from_intersection_with_WktWgs84``
+    to find map units intersecting the basin, joins to ``component``
+    for ``hydgrpdcd``, and aggregates by component-percentage weight.
+    Dual classes ('A/D','B/D','C/D') are reported as their drained
+    letter ('A','B','C') for cleanliness — the NRCS CN table treats
+    them this way too.
     """
-    from pygeohydro import soil_gnatsgo
+    geom_simple = geom.simplify(_SDA_SIMPLIFY_TOLERANCE, preserve_topology=True)
+    wkt = geom_simple.wkt
 
-    ds = soil_gnatsgo(["hydclprs"], geom, crs=4326)
-    if hasattr(ds, "data_vars"):
-        return ds["hydclprs"]
-    # Some versions return a dict of datasets keyed by basin index.
-    first = next(iter(ds.values()))
-    return first["hydclprs"]
+    sql = (
+        "SELECT co.hydgrpdcd AS hsg, SUM(co.comppct_r) AS weight "
+        "FROM SDA_Get_Mukey_from_intersection_with_WktWgs84('" + wkt + "') AS m "
+        "INNER JOIN component co ON co.mukey = m.mukey "
+        "WHERE co.majcompflag = 'Yes' AND co.hydgrpdcd IS NOT NULL "
+        "GROUP BY co.hydgrpdcd"
+    )
+    body = json.dumps({"FORMAT": "JSON", "QUERY": sql}).encode("utf-8")
+    req = urllib.request.Request(
+        _SDA_URL,
+        data=body,
+        headers={"Content-Type": "application/json", "Accept": "application/json"},
+        method="POST",
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            payload = json.loads(resp.read().decode("utf-8"))
+    except (urllib.error.URLError, urllib.error.HTTPError, json.JSONDecodeError) as exc:
+        raise RuntimeError(f"SDA request failed: {exc}") from exc
 
+    rows = payload.get("Table") or []
+    if not rows:
+        return {}
 
-def dominant_hsg_letter(da) -> tuple[str | None, dict[str, float]]:
-    """Return (dominant letter, {letter: pct}) from a gNATSGO hydclprs raster."""
-    values = np.asarray(da.values).flatten()
-    values = values[~np.isnan(values.astype(float))] if values.dtype.kind == "f" else values
-    values = values[values > 0]
-    if values.size == 0:
-        return None, {}
-    pcts: dict[str, float] = {}
-    classes, counts = np.unique(values.astype(int), return_counts=True)
-    total = values.size
-    for code, n in zip(classes, counts):
-        letter = HSG_CODE_TO_LETTER.get(int(code))
-        if letter is None:
+    # SDA "JSON" format returns: [[col1, col2], [val1, val2], ...]. The first
+    # row is column names; subsequent rows are data.
+    raw: dict[str, float] = {}
+    for row in rows[1:]:
+        if not row or row[0] is None:
             continue
-        pcts[letter] = round(pcts.get(letter, 0.0) + 100.0 * n / total, 2)
-    if not pcts:
-        return None, {}
-    dominant = max(pcts.items(), key=lambda kv: kv[1])[0]
-    return dominant, pcts
+        letter_raw = str(row[0]).strip()
+        try:
+            weight = float(row[1])
+        except (TypeError, ValueError):
+            continue
+        # Map dual classes to their drained letter.
+        letter = {"A/D": "A", "B/D": "B", "C/D": "C"}.get(letter_raw, letter_raw)
+        raw[letter] = raw.get(letter, 0.0) + weight
+
+    total = sum(raw.values())
+    if total <= 0:
+        return {}
+    return {k: round(100.0 * v / total, 2) for k, v in raw.items()}
+
+
+def dominant_letter(distribution: dict[str, float]) -> str | None:
+    if not distribution:
+        return None
+    return max(distribution.items(), key=lambda kv: kv[1])[0]
 
 
 # ---------------------------------------------------------------------------
@@ -173,38 +213,29 @@ def dominant_hsg_letter(da) -> tuple[str | None, dict[str, float]]:
 # ---------------------------------------------------------------------------
 
 
-def average_runoff_cn(nlcd_da, hsg_da) -> float | None:
-    """Pixel-wise NLCD × HSG lookup averaged across the basin.
+_LETTER_TO_HSG_CODE = {"A": 1, "B": 2, "C": 3, "D": 4}
 
-    Reprojects the HSG raster to match NLCD's grid so we can pair cells
-    deterministically. Returns None if nothing resolvable overlaps.
+
+def average_runoff_cn(nlcd_da, hsg_letter: str) -> float | None:
+    """Per-pixel NLCD lookup averaged across the basin, treating the
+    basin's dominant HSG as spatially uniform. This loses the modest
+    HSG variation within most Driftless basins but is the right fidelity
+    given that HSG comes from a basin-level SDA aggregate, not a raster.
     """
-    try:
-        hsg_matched = hsg_da.rio.reproject_match(nlcd_da)
-    except Exception as exc:  # noqa: BLE001
-        logger.debug("HSG reproject failed: %s", exc)
+    hsg_code = _LETTER_TO_HSG_CODE.get(hsg_letter)
+    if hsg_code is None:
         return None
 
     nlcd = np.asarray(nlcd_da.values).astype(int, copy=False)
-    hsg = np.asarray(hsg_matched.values).astype(int, copy=False)
-    if nlcd.shape != hsg.shape:
-        return None
-
     cn_accum = 0.0
     n = 0
-    nlcd_codes = np.unique(nlcd[nlcd > 0])
-    hsg_codes = np.unique(hsg[hsg > 0])
-    for nc in nlcd_codes:
-        for hc in hsg_codes:
-            cn = cn_for(int(nc), int(hc))
-            if cn is None:
-                continue
-            mask = (nlcd == nc) & (hsg == hc)
-            k = int(mask.sum())
-            if k == 0:
-                continue
-            cn_accum += cn * k
-            n += k
+    for code in np.unique(nlcd[nlcd > 0]):
+        cn = cn_for(int(code), hsg_code)
+        if cn is None:
+            continue
+        k = int((nlcd == code).sum())
+        cn_accum += cn * k
+        n += k
     if n == 0:
         return None
     return round(cn_accum / n, 2)
@@ -285,7 +316,7 @@ def characterize_basin(
 
     fields: dict = {}
     nlcd_da = None
-    hsg_da = None
+    hsg_letter: str | None = None
 
     # Land cover
     try:
@@ -299,21 +330,21 @@ def characterize_basin(
         logger.exception("NLCD fetch failed for basin %d", basin.id)
         result.errors.append(f"nlcd: {type(exc).__name__}: {exc}")
 
-    # HSG
+    # HSG via SDA REST
     try:
-        hsg_da = fetch_hsg(geom)
-        letter, _ = dominant_hsg_letter(hsg_da)
-        if letter:
-            fields["dominant_hsg"] = letter
+        hsg_dist = fetch_hsg_distribution(geom)
+        hsg_letter = dominant_letter(hsg_dist)
+        if hsg_letter:
+            fields["dominant_hsg"] = hsg_letter
             result.fields_written.append("dominant_hsg")
     except Exception as exc:  # noqa: BLE001
         logger.exception("HSG fetch failed for basin %d", basin.id)
         result.errors.append(f"hsg: {type(exc).__name__}: {exc}")
 
-    # Runoff CN (requires both)
-    if nlcd_da is not None and hsg_da is not None:
+    # Runoff CN (requires both NLCD raster and a dominant HSG letter)
+    if nlcd_da is not None and hsg_letter is not None:
         try:
-            cn = average_runoff_cn(nlcd_da, hsg_da)
+            cn = average_runoff_cn(nlcd_da, hsg_letter)
             if cn is not None:
                 fields["runoff_curve_number"] = cn
                 result.fields_written.append("runoff_curve_number")
