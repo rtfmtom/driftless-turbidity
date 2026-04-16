@@ -16,9 +16,14 @@ const BasinsMap = dynamic(
 
 const REFRESH_MS = 60_000;
 
+const MAP_CLASS =
+  "h-[45vh] min-h-[280px] w-full rounded border border-slate-200 sm:h-[55vh] lg:h-[60vh]";
+
 function MapPlaceholder() {
   return (
-    <div className="flex h-[60vh] w-full items-center justify-center rounded border border-slate-200 bg-slate-50 text-slate-400">
+    <div
+      className={`${MAP_CLASS} flex items-center justify-center bg-slate-50 text-slate-400`}
+    >
       Loading map…
     </div>
   );
@@ -54,18 +59,18 @@ export default function HomePage() {
 
   return (
     <main className="space-y-4">
-      <header className="flex items-center justify-between">
+      <header className="flex flex-col items-start justify-between gap-3 sm:flex-row sm:items-center">
         <div>
-          <h1 className="text-2xl font-semibold">
+          <h1 className="text-xl font-semibold sm:text-2xl">
             Driftless Clarity — Watch List
           </h1>
           <p className="text-sm text-slate-600">
-            Live USGS readings refresh every minute. Click a basin to drill in.
+            Live USGS readings refresh every minute. Tap a basin to drill in.
           </p>
         </div>
         <Link
           href="/search"
-          className="rounded bg-slate-900 px-3 py-2 text-sm text-white hover:bg-slate-700"
+          className="w-full rounded bg-slate-900 px-3 py-2.5 text-center text-sm text-white hover:bg-slate-700 sm:w-auto"
         >
           Add a gauge
         </Link>
@@ -77,7 +82,7 @@ export default function HomePage() {
         </div>
       )}
 
-      <BasinsMap basins={basins} />
+      <BasinsMap basins={basins} className={MAP_CLASS} />
 
       {loading && streams === null ? (
         <div className="rounded border border-slate-200 bg-white p-6 text-slate-500">
